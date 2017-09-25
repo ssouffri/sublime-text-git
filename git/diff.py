@@ -24,8 +24,8 @@ class GitDiff (object):
         if s.get('diff_panel'):
             self.panel(result, syntax=syntax)
         else:
-            self.scratch(result, title="Git Diff", syntax=syntax)
-
+            view = self.scratch(result, title="Git Diff", syntax=syntax)
+            return view
 
 class GitDiffCommit (object):
     def run(self, edit=None, ignore_whitespace=False):
@@ -47,9 +47,15 @@ class GitDiffCommand(GitDiff, GitTextCommand):
     pass
 
 
-class GitDiffAllCommand(GitDiff, GitWindowCommand):
-    pass
+global_diff_wdir_dict = {}
 
+class GitDiffAllCommand(GitDiff, GitWindowCommand):
+    def diff_done(self, result):
+        hacked_diff_git_root = super().get_working_dir()
+        view = super().diff_done(result)
+        if view:
+            global_diff_wdir_dict[view.buffer_id()] = git_root(hacked_diff_git_root)
+            #print("hacked_diff_git_root:",  view.buffer_id(), global_diff_wdir_dict[view.buffer_id()])
 
 class GitDiffCommitCommand(GitDiffCommit, GitWindowCommand):
     pass
