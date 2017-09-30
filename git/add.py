@@ -57,7 +57,7 @@ class GitAddSelectedHunkCommand(GitTextCommand):
             return True
 
         # First, is this actually a file on the file system?
-        return GitTextCommand.is_enabled(self)
+        return super().is_enabled()
 
     def searchDiffLines(self, sel) :
         matcher = re.compile('@@ -([0-9]*)(?:,([0-9]*))? \+([0-9]*)(?:,([0-9]*))? @@')
@@ -142,7 +142,7 @@ class GitAddSelectedHunkCommand(GitTextCommand):
         hunks = [{"diff": ""}]
         i = 0
         matcher = re.compile('^@@ -([0-9]*)(?:,([0-9]*))? \+([0-9]*)(?:,([0-9]*))? @@')
-        for line in result.splitlines(keepends=True):
+        for line in result.splitlines(keepends=True): # if different line endings, patch will not apply
             if line.startswith('@@'):
                 i += 1
                 match = matcher.match(line)
@@ -160,7 +160,6 @@ class GitAddSelectedHunkCommand(GitTextCommand):
         selection_is_hunky = False
         for hunk in hunks:
             for sel in selection:
-                print("hunk:",hunk['start'],hunk['end'],"sel:",sel)
                 if sel["end"] < hunk["start"]:
                     continue
                 if sel["start"] > hunk["end"]:
@@ -169,12 +168,10 @@ class GitAddSelectedHunkCommand(GitTextCommand):
                 selection_is_hunky = True
 
         if selection_is_hunky:
-            #print("diffs:\'%s\'" % diffs)
-
-            if edit_patch:
+            if edit_patch: # open an input panel to modify the patch
                 patch_view = self.get_window().show_input_panel(
                     "Message", diffs,
-                    lambda message: self.on_input(message,**kwargs), None, None
+                    lambda edited_patch: self.on_input(edited_patch,**kwargs), None, None
                 )
                 s = sublime.load_settings("Git.sublime-settings")
                 syntax = s.get("diff_syntax", "Packages/Diff/Diff.tmLanguage")
@@ -185,8 +182,8 @@ class GitAddSelectedHunkCommand(GitTextCommand):
         else:
             sublime.status_message("No selected hunk")
 
-    def on_input(self, message, **kwargs):
-        self.run_command(['git', 'apply', '--cached'], stdin=message, **kwargs)
+    def on_input(self, patch, **kwargs):
+        self.run_command(['git', 'apply', '--cached'], stdin=patch, **kwargs)
 
 
 # Also, sometimes we want to undo adds

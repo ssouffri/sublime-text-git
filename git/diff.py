@@ -21,7 +21,7 @@ def add_gitDiffRootToDiffOutput(output, gitRoot):
 
 class GitDiff (object):
     def run(self, edit=None, ignore_whitespace=False):
-        command = ['git', 'diff', '--no-color', '-U1']
+        command = ['git', 'diff', '--no-color']#, '-U1']
         if ignore_whitespace:
             command.extend(('--ignore-all-space', '--ignore-blank-lines'))
         command.extend(('--', self.get_file_name()))
@@ -33,14 +33,13 @@ class GitDiff (object):
             return
         s = sublime.load_settings("Git.sublime-settings")
         syntax = s.get("diff_syntax", "Packages/Diff/Diff.tmLanguage")
+        # We add meta-information from which we can infer the git_root after sublime restart
         result = add_gitDiffRootToDiffOutput(result, git_root(self.get_working_dir()))
         if s.get('diff_panel'):
             self.panel(result, syntax=syntax)
         else:
-            view = self.scratch(result, title="Git Diff", syntax=syntax)
-            for v in view.window().views():
-                #if view.buffer_id() == v.buffer_id():
-                    print("view %i: %s" % (v.buffer_id(), v.name()))
+            self.scratch(result, title="Git Diff", syntax=syntax)
+
 
 class GitDiffCommit (object):
     def run(self, edit=None, ignore_whitespace=False):
@@ -61,8 +60,10 @@ class GitDiffCommit (object):
 class GitDiffCommand(GitDiff, GitTextCommand):
     pass
 
+
 class GitDiffAllCommand(GitDiff, GitWindowCommand):
     pass
+
 
 class GitDiffCommitCommand(GitDiffCommit, GitWindowCommand):
     pass

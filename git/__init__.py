@@ -260,7 +260,6 @@ class GitCommand(object):
             command = [arg for arg in command if arg]
         if 'working_dir' not in kwargs:
             kwargs[str('working_dir')] = str(self.get_working_dir())
-            print('working_dir', kwargs[str('working_dir')])
         if 'fallback_encoding' not in kwargs and self.active_view() and self.active_view().settings().get('fallback_encoding'):
             kwargs[str('fallback_encoding')] = str(self.active_view().settings().get('fallback_encoding').rpartition('(')[2].rpartition(')')[0])
 
@@ -329,7 +328,6 @@ class GitCommand(object):
         self.record_git_root_to_view(scratch_file)
         scratch_file.settings().set('word_wrap', False)
         scratch_file.run_command('goto_line', {'line': focused_line})
-        print("scratch_file:", id(scratch_file))
         return scratch_file
 
     def panel(self, output, **kwargs):
