@@ -6,10 +6,22 @@ import os
 import re
 from . import GitTextCommand, GitWindowCommand, do_when, goto_xy, git_root, get_open_folder_from_window
 
+gitDiffRootPrefix = "## git_diff_root: "
+
+def get_gitDiffRootInView(view):
+    git_root_prefix = gitDiffRootPrefix
+    line_0 = view.substr(view.line(0))
+    if git_root_prefix == line_0[:len(git_root_prefix)]:
+        git_root = line_0[len(git_root_prefix):].strip("\"")
+        return git_root
+    return None
+
+def add_gitDiffRootToDiffOutput(output, gitRoot):
+    return gitDiffRootPrefix + "\"" + gitRoot + "\"\n" + output
 
 class GitDiff (object):
     def run(self, edit=None, ignore_whitespace=False):
-        command = ['git', 'diff', '--no-color']
+        command = ['git', 'diff', '--no-color', '-U1']
         if ignore_whitespace:
             command.extend(('--ignore-all-space', '--ignore-blank-lines'))
         command.extend(('--', self.get_file_name()))
@@ -21,11 +33,14 @@ class GitDiff (object):
             return
         s = sublime.load_settings("Git.sublime-settings")
         syntax = s.get("diff_syntax", "Packages/Diff/Diff.tmLanguage")
+        result = add_gitDiffRootToDiffOutput(result, git_root(self.get_working_dir()))
         if s.get('diff_panel'):
             self.panel(result, syntax=syntax)
         else:
             view = self.scratch(result, title="Git Diff", syntax=syntax)
-            return view
+            for v in view.window().views():
+                #if view.buffer_id() == v.buffer_id():
+                    print("view %i: %s" % (v.buffer_id(), v.name()))
 
 class GitDiffCommit (object):
     def run(self, edit=None, ignore_whitespace=False):
@@ -46,16 +61,8 @@ class GitDiffCommit (object):
 class GitDiffCommand(GitDiff, GitTextCommand):
     pass
 
-
-global_diff_wdir_dict = {}
-
 class GitDiffAllCommand(GitDiff, GitWindowCommand):
-    def diff_done(self, result):
-        hacked_diff_git_root = super().get_working_dir()
-        view = super().diff_done(result)
-        if view:
-            global_diff_wdir_dict[view.buffer_id()] = git_root(hacked_diff_git_root)
-            #print("hacked_diff_git_root:",  view.buffer_id(), global_diff_wdir_dict[view.buffer_id()])
+    pass
 
 class GitDiffCommitCommand(GitDiffCommit, GitWindowCommand):
     pass

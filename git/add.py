@@ -43,20 +43,18 @@ class GitAddChoiceCommand(GitStatusCommand):
     def rerun(self, result):
         self.run()
 
-from .diff import global_diff_wdir_dict
+from .diff import get_gitDiffRootInView
 
 class GitAddSelectedHunkCommand(GitTextCommand):
+
+    def is_gitDiffView(self, view):
+        return view.name() == "Git Diff" and get_gitDiffRootInView(view) is not None
 
     def is_enabled(self):
 
         view = self.active_view()
-        #print("self.view:", "\'%u\' \'%s\' \'%s\'" % (id(view), view.name(), view.settings().get("git_root_dir")), view.buffer_id() )
-
-        if view.name() == "Git Diff" and view.buffer_id() in global_diff_wdir_dict:
-            #print("diff_git_root:", global_diff_wdir_dict[view.buffer_id()] )
+        if self.is_gitDiffView(view):
             return True
-        else:
-            print('no hacked_diff_git_root')
 
         # First, is this actually a file on the file system?
         return GitTextCommand.is_enabled(self)
@@ -116,26 +114,20 @@ class GitAddSelectedHunkCommand(GitTextCommand):
 
         return foundList
 
-    def run(self, edit):
+    def run(self, edit, edit_patch=False):
 
-        if self.view.name() == "Git Diff":
-
-            hacked_diff_git_root = global_diff_wdir_dict[self.view.buffer_id()]
-            working_dir=hacked_diff_git_root # "C:\\Users\\stso\\AppData\\Roaming\\Sublime Text 3\\Packages\\sublime-text-git"
-
+        if self.is_gitDiffView(self.view):
+            working_dir = get_gitDiffRootInView(self.view)
             foundList = self.getGitDiffSelection()
-
-            #print("working:", str(self.get_working_dir()))
-            #print(foundList)
 
             for fileName in foundList:
                 selectionL = foundList[fileName]
-                self.run_command(['git', 'diff', '--no-color', '-U1', fileName], lambda result: self.cull_diff(result, selectionL, working_dir=working_dir), working_dir=working_dir)
+                self.run_command(['git', 'diff', '--no-color', '-U1', fileName], lambda result: self.cull_diff(result, selectionL, edit_patch, working_dir=working_dir), working_dir=working_dir)
 
         else:
             self.run_command(['git', 'diff', '--no-color', '-U1', self.get_file_name()], self.cull_diff)
 
-    def cull_diff(self, result, selection=[], **kwargs):
+    def cull_diff(self, result, selection=[], edit_patch=False, **kwargs):
 
         print("cull_diff")
         if len(selection) == 0:
@@ -150,7 +142,7 @@ class GitAddSelectedHunkCommand(GitTextCommand):
         hunks = [{"diff": ""}]
         i = 0
         matcher = re.compile('^@@ -([0-9]*)(?:,([0-9]*))? \+([0-9]*)(?:,([0-9]*))? @@')
-        for line in result.splitlines():
+        for line in result.splitlines(keepends=True):
             if line.startswith('@@'):
                 i += 1
                 match = matcher.match(line)
@@ -161,7 +153,7 @@ class GitAddSelectedHunkCommand(GitTextCommand):
                 else:
                     end = start
                 hunks.append({"diff": "", "start": start, "end": end})
-            hunks[i]["diff"] += line + "\n"
+            hunks[i]["diff"] += line
 
         diffs = hunks[0]["diff"]
         hunks.pop(0)
@@ -177,9 +169,24 @@ class GitAddSelectedHunkCommand(GitTextCommand):
                 selection_is_hunky = True
 
         if selection_is_hunky:
-            self.run_command(['git', 'apply', '--cached'], stdin=diffs, **kwargs)
+            #print("diffs:\'%s\'" % diffs)
+
+            if edit_patch:
+                patch_view = self.get_window().show_input_panel(
+                    "Message", diffs,
+                    lambda message: self.on_input(message,**kwargs), None, None
+                )
+                s = sublime.load_settings("Git.sublime-settings")
+                syntax = s.get("diff_syntax", "Packages/Diff/Diff.tmLanguage")
+                patch_view.set_syntax_file(syntax)
+                patch_view.settings().set('word_wrap', False)
+            else:
+                self.on_input(diffs,**kwargs)
         else:
             sublime.status_message("No selected hunk")
+
+    def on_input(self, message, **kwargs):
+        self.run_command(['git', 'apply', '--cached'], stdin=message, **kwargs)
 
 
 # Also, sometimes we want to undo adds
