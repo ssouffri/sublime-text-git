@@ -59,30 +59,24 @@ class GitAddSelectedHunkCommand(GitTextCommand):
         # First, is this actually a file on the file system?
         return super().is_enabled()
 
-    def searchDiffLines(self, sel) :
+    def searchDiffLines(self, diff_part) :
         matcher = re.compile('@@ -([0-9]*)(?:,([0-9]*))? \+([0-9]*)(?:,([0-9]*))? @@')
-        line = self.view.substr(sel)
-        #print("line_region:", sel, line)
-        match = matcher.search(line)
+        match = matcher.search(diff_part)
         if match:
             start = match.group(3)
             end = match.group(4)
             return int(start), int(end)
         return None, None
 
-    def searchGitDiff(self, sel) :
-        matcher = re.compile('--- a/(.+)\n\+\+\+ b/(.+)\n@@ -([0-9]*)(?:,([0-9]*))? \+([0-9]*)(?:,([0-9]*))? @@')
-        line = self.view.substr(sel)
-        #print("line_region:", sel, line)
-        match = matcher.search(line)
+    def searchGitDiffFile(self, diff_part) :
+        matcher = re.compile('--- a/(.+)\n\+\+\+ b/(.+)\n')
+        match = matcher.search(diff_part)
         if match:
             file1 = match.group(1)
             file2 = match.group(2)
             if file1 == file2:
-                start = match.group(5)
-                end = match.group(6)
-                return file1, int(start), int(end)
-        return None, None, None
+                return file1
+        return None
 
     def getGitDiffSelection(self):
 
@@ -93,13 +87,16 @@ class GitAddSelectedHunkCommand(GitTextCommand):
             fileName = None
             start = None
 
+            # We expand the selection upwards with one character until we find a hunk and it's file
+            # TODO: optimize
             while 0 < expandedRegion.begin():
 
+                diff_part = self.view.substr(expandedRegion)
                 if start is None:
-                    start, size = self.searchDiffLines(expandedRegion)
+                    start, size = self.searchDiffLines(diff_part)
 
                 if start is not None:
-                    fileName, x, y = self.searchGitDiff(expandedRegion)
+                    fileName = self.searchGitDiffFile(diff_part)
                     if fileName:
                         selection = {
                             "start": start+no_context_lines_diff,
