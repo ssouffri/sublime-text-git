@@ -87,7 +87,7 @@ class GitAddSelectedHunkCommand(GitTextCommand):
     def getGitDiffSelection(self):
 
         no_context_lines_diff = 2
-        foundList = {}
+        fileSelectionD = {}
         for region in self.view.sel():
             expandedRegion = region
             fileName = None
@@ -105,39 +105,42 @@ class GitAddSelectedHunkCommand(GitTextCommand):
                             "start": start+no_context_lines_diff,
                             "end": start+size-no_context_lines_diff,
                         }
-                        if fileName not in foundList:
-                            foundList[fileName] = []
-                        foundList[fileName].append(selection)
+                        if fileName not in fileSelectionD:
+                            fileSelectionD[fileName] = []
+                        fileSelectionD[fileName].append(selection)
                         break
 
                 expandedRegion = sublime.Region(expandedRegion.begin()-1,expandedRegion.end())
 
-        return foundList
+        return fileSelectionD
+
+    def getViewSelection(self):
+        selection = []
+        for sel in self.view.sel():
+            selection.append({
+                "start": self.view.rowcol(sel.begin())[0] + 1,
+                "end": self.view.rowcol(sel.end())[0] + 1,
+            })
+        fileSelectionD = {self.get_file_name():selection}
+        return fileSelectionD
+
 
     def run(self, edit, edit_patch=False):
-
+        kwargs = {}
         if self.is_gitDiffView(self.view):
-            working_dir = get_gitDiffRootInView(self.view)
-            foundList = self.getGitDiffSelection()
-
-            for fileName in foundList:
-                selectionL = foundList[fileName]
-                self.run_command(['git', 'diff', '--no-color', '-U1', fileName], lambda result: self.cull_diff(result, selectionL, edit_patch, working_dir=working_dir), working_dir=working_dir)
-
+            # When getting the patch from a "Git Diff" file, the git_root of
+            # the diff might not be the same as the git root of this view.
+            kwargs['working_dir'] = get_gitDiffRootInView(self.view)
+            fileSelectionD = self.getGitDiffSelection()
         else:
-            self.run_command(['git', 'diff', '--no-color', '-U1', self.get_file_name()], self.cull_diff)
+            fileSelectionD = self.getViewSelection()
 
-    def cull_diff(self, result, selection=[], edit_patch=False, **kwargs):
+        # TODO: we can't get patches for multiple files with one command yet
+        for fileName in fileSelectionD:
+            selectionL = fileSelectionD[fileName]
+            self.run_command(['git', 'diff', '--no-color', '-U1', fileName], lambda result: self.cull_diff(result, selectionL, edit_patch, **kwargs), **kwargs)
 
-        print("cull_diff")
-        if len(selection) == 0:
-            for sel in self.view.sel():
-                selection.append({
-                    "start": self.view.rowcol(sel.begin())[0] + 1,
-                    "end": self.view.rowcol(sel.end())[0] + 1,
-                })
-        else:
-            print("got selection")
+    def cull_diff(self, result, selection, edit_patch=False, **kwargs):
 
         hunks = [{"diff": ""}]
         i = 0
